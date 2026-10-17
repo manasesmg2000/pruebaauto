@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registro de Pulsaciones</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #e0e0e0;
+    }
+
+    .container {
+      text-align: center;
+      padding: 2.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+      max-width: 480px;
+      width: 90%;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 0.5rem;
+      color: #ffffff;
+      letter-spacing: 0.5px;
+    }
+
+    .subtitle {
+      font-size: 0.9rem;
+      color: #a0aec0;
+      margin-bottom: 2rem;
+    }
+
+    #btn-registrar {
+      position: relative;
+      padding: 1rem 2.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+    }
+
+    #btn-registrar:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(102, 126, 234, 0.65);
+    }
+
+    #btn-registrar:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    #btn-registrar:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    /* Estado / feedback */
+    #estado {
+      margin-top: 1.2rem;
+      font-size: 0.9rem;
+      min-height: 1.4em;
+      font-weight: 500;
+      transition: opacity 0.3s;
+    }
+
+    #estado.ok    { color: #68d391; }
+    #estado.error { color: #fc8181; }
+    #estado.carga { color: #f6e05e; }
+
+    /* Contador */
+    .contador {
+      margin-top: 1.8rem;
+      font-size: 0.85rem;
+      color: #a0aec0;
+    }
+
+    .contador span {
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    /* Log visual */
+    #log-box {
+      margin-top: 1.8rem;
+      max-height: 200px;
+      overflow-y: auto;
+      background: rgba(0,0,0,0.3);
+      border-radius: 10px;
+      padding: 0.8rem 1rem;
+      text-align: left;
+      font-size: 0.8rem;
+      font-family: 'Courier New', monospace;
+      color: #81e6d9;
+      display: none;
+      scrollbar-width: thin;
+      scrollbar-color: #667eea transparent;
+    }
+
+    #log-box.visible { display: block; }
+
+    #log-box p {
+      margin-bottom: 0.3rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 0.3rem;
+    }
+
+    #log-box p:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .nota {
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: #718096;
+    }
+
+    .nota a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .nota a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>⏱️ Registro de Pulsaciones</h1>
+    <p class="subtitle">Pulsa el botón para guardar la fecha y hora en Google Sheets</p>
+
+    <button id="btn-registrar">📌 Registrar ahora</button>
+
+    <p id="estado"></p>
+
+    <div class="contador">
+      Registros en esta sesión: <span id="num-registros">0</span>
+    </div>
+
+    <div id="log-box"></div>
+
+    <p class="nota">
+      Los datos se guardan en 
+      <a href="https://sheets.google.com" target="_blank">Google Sheets</a> 
+      automáticamente.
+    </p>
+  </div>
+
+  <script>
+    // ── URL de tu Google Apps Script ──────────────────────────────
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwDBA7meoyuhUDkgn_QMh7MWvnEFAoF3NVPOBa3Q56u80crYZVCcuSogdf0hhVdYlwX/exec';
+
+    // ── Referencias al DOM ────────────────────────────────────────
+    const btnRegistrar = document.getElementById('btn-registrar');
+    const estado       = document.getElementById('estado');
+    const numRegistros = document.getElementById('num-registros');
+    const logBox       = document.getElementById('log-box');
+
+    let contador = 0;
+
+    // ── Función: fecha y hora formateada ──────────────────────────
+    function obtenerFechaHora() {
+      const ahora = new Date();
+      const dias  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+      const meses = ['enero','febrero','marzo','abril','mayo','junio',
+                     'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+      const diaSemana = dias[ahora.getDay()];
+      const dia  = String(ahora.getDate()).padStart(2, '0');
+      const mes  = meses[ahora.getMonth()];
+      const anio = ahora.getFullYear();
+      const hh   = String(ahora.getHours()).padStart(2, '0');
+      const mm   = String(ahora.getMinutes()).padStart(2, '0');
+      const ss   = String(ahora.getSeconds()).padStart(2, '0');
+
+      return `${diaSemana}, ${dia} de ${mes} de ${anio} — ${hh}:${mm}:${ss}`;
+    }
+
+    // ── Función: mostrar estado ───────────────────────────────────
+    function mostrarEstado(msg, tipo) {
+      estado.textContent = msg;
+      estado.className = tipo;
+    }
+
+    // ── Evento: clic en el botón ──────────────────────────────────
+    btnRegistrar.addEventListener('click', async () => {
+      const fecha = obtenerFechaHora();
+
+      // Bloquear botón mientras envía
+      btnRegistrar.disabled = true;
+      mostrarEstado('⏳ Guardando...', 'carga');
+
+      try {
+        await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',       // necesario para Google Apps Script
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fecha: fecha })
+        });
+
+        // Con mode:'no-cors' no podemos leer la respuesta,
+        // pero si no lanza error, el envío fue correcto.
+        contador++;
+        numRegistros.textContent = contador;
+
+        mostrarEstado('✅ Guardado en Google Sheets', 'ok');
+
+        // Añadir al log visual
+        logBox.classList.add('visible');
+        const p = document.createElement('p');
+        p.textContent = `[${contador}] ${fecha}`;
+        logBox.appendChild(p);
+        logBox.scrollTop = logBox.scrollHeight;
+
+      } catch (err) {
+        mostrarEstado('❌ Error al guardar. Revisa tu conexión.', 'error');
+        console.error(err);
+      } finally {
+        btnRegistrar.disabled = false;
+        // Limpiar mensaje tras 3 segundos
+        setTimeout(() => { estado.textContent = ''; estado.className = ''; }, 3000);
+      }
+    });
+  </script>
+
+</body>
+</html>
